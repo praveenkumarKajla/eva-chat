@@ -4,7 +4,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card"
-import { LogOut, Maximize2, Minimize2, Pencil, Send, Trash2 } from 'lucide-react'
+import { LogOut, Maximize2, Minimize2, Pencil, Send, Trash2, Settings } from 'lucide-react'
 import { v4 as randomUUID } from 'uuid'
 import { useNavigate } from 'react-router-dom'
 import AVAIcon from "@/assets/after-ava-graphic.png"
@@ -67,6 +67,7 @@ export default function ChatWidget() {
   const [input, setInput] = useState('')
   const [editingInput, setEditingInput] = useState('')
   const [isLoading, setIsLoading] = useState(false);
+  const [context, setContext] = useState('Onboarding')
   const [settings, setSettings] = useState<Settings>(loadSettings())
 
 
@@ -257,17 +258,17 @@ export default function ChatWidget() {
   }
 
   const cardClassName = settings.isMaximized 
-  ? "w-full h-full fixed top-0 left-0 z-50 m-0 rounded-none"
-  : "w-[450px] h-[700px] flex flex-col";
+    ? "w-full h-full fixed top-0 left-0 z-50 m-0 rounded-none"
+    : "w-[450px] h-[700px] flex flex-col";
 
   return (
     <div className={`flex items-center justify-center ${settings.isMaximized ? 'min-h-screen bg-gray-100' : 'h-screen'}`}>
       <Card className={`${cardClassName} flex flex-col`}>
-      <CardHeader className="flex flex-row justify-between items-start p-4">
-        <Button variant="ghost" size="icon" onClick={toggleMaximize}>
+        <CardHeader className="flex flex-row justify-between items-start p-4">
+          <Button variant="ghost" size="icon" onClick={toggleMaximize}>
             {settings.isMaximized ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
           </Button>
-        <div className="flex flex-col items-center text-center">
+          <div className="flex flex-col items-center text-center">
             <Avatar className="mb-2">
               <AvatarImage src={AVAIcon} alt="Ava" />
               <AvatarFallback>AVA</AvatarFallback>
@@ -290,14 +291,13 @@ export default function ChatWidget() {
         <CardContent className="flex-grow overflow-auto p-4">
           {messages.map((message) => (
             <div key={message.id} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'} mb-4`}>
-                {message.role === 'assistant' && (
+              {message.role === 'assistant' && (
                 <Avatar className="mr-2">
                   <AvatarImage src={AVAIcon} alt="Ava" />
                   <AvatarFallback>AVA</AvatarFallback>
                 </Avatar>
               )}
               <div className={`max-w-[70%] ${message.role === 'user' ? 'bg-purple-500 text-white group relative' : 'bg-gray-100'} rounded-lg p-3`}>
-               
                 {message.isEditing ? (
                   <div className="flex flex-col space-y-2">
                     <Input
@@ -320,13 +320,13 @@ export default function ChatWidget() {
                 )}
                 {message.role === 'user' && !message.isEditing && (
                   <div className="absolute top-0 right-0 mt-1 mr-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <Button variant="ghost" size="icon" onClick={() => handleEditMessage(message.id, message.content)}>
-                    <Pencil className="h-4 w-4" />
-                  </Button>
-                  <Button variant="ghost" size="icon" onClick={() => handleDeleteMessage(message.id)}>
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
+                    <Button variant="ghost" size="icon" onClick={() => handleEditMessage(message.id, message.content)}>
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button variant="ghost" size="icon" onClick={() => handleDeleteMessage(message.id)}>
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
                 )}
               </div>
             </div>
@@ -359,6 +359,25 @@ export default function ChatWidget() {
             <Button onClick={handleSendMessage}><Send className="h-4 w-4" /></Button>
           </div>
         </CardFooter>
+        <div className="flex justify-between items-center px-4 py-2 bg-gray-100">
+          <div className="flex items-center space-x-2">
+            <span className="text-sm text-gray-500">Context</span>
+            <select
+              value={context}
+              onChange={(e) => setContext(e.target.value)}
+              className="bg-transparent text-sm"
+            >
+              <option>Onboarding</option>
+              <option>Support</option>
+              <option>Sales</option>
+            </select>
+          </div>
+          <div className="flex items-center space-x-2">
+            <Button variant="ghost" size="icon">
+              <Settings className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
       </Card>
     </div>
   )
