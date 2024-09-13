@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
+import ReactMarkdown from 'react-markdown'
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -257,7 +258,7 @@ export default function ChatWidget() {
                     </div>
                   </div>
                 ) : (
-                  <p className="text-sm">{message.content}</p>
+                  <ReactMarkdown className={"text-sm"}>{message.content}</ReactMarkdown>
                 )}
                 {message.role === 'user' && !message.isEditing && (
                   <div className="absolute top-0 right-0 mt-1 mr-1 opacity-0 group-hover:opacity-100 transition-opacity">
