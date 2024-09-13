@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card"
 import { Send } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 
 type Message = {
   id: string;
@@ -18,9 +19,19 @@ export default function ChatWidget() {
   const [input, setInput] = useState('')
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
+  const navigate = useNavigate();
+
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
   }
+
+  useEffect(() => {
+    const token = localStorage.getItem('jwt_token');
+    if (!token) {
+      navigate('/login');
+    }
+  }, []);
+
 
   useEffect(scrollToBottom, [messages])
 
