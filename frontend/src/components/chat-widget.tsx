@@ -1,14 +1,15 @@
 import { useState, useRef, useEffect } from 'react'
 import ReactMarkdown from 'react-markdown'
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card"
-import { Pencil, Send, Trash2 } from 'lucide-react'
+import { LogOut, Maximize2, Minimize2, Pencil, Send, Trash2 } from 'lucide-react'
 import { v4 as randomUUID } from 'uuid'
 import { useNavigate } from 'react-router-dom'
 import AVAIcon from "@/assets/after-ava-graphic.png"
-import { AvatarImage } from '@radix-ui/react-avatar'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+
 
 type BackendMessage = {
   id: string;
@@ -24,6 +25,25 @@ type Message = {
   content: string;
   isEditing?: boolean;
 }
+
+type Settings = {
+  isMaximized: boolean;
+  // Add other settings here in the future
+}
+
+const defaultSettings: Settings = {
+  isMaximized: false,
+}
+
+const loadSettings = (): Settings => {
+  const storedSettings = localStorage.getItem('chatWidgetSettings')
+  return storedSettings ? JSON.parse(storedSettings) : defaultSettings
+}
+
+const saveSettings = (settings: Settings) => {
+  localStorage.setItem('chatWidgetSettings', JSON.stringify(settings))
+}
+
 
 
 const API_BASE_URL = 'http://localhost:8000';
@@ -47,6 +67,8 @@ export default function ChatWidget() {
   const [input, setInput] = useState('')
   const [editingInput, setEditingInput] = useState('')
   const [isLoading, setIsLoading] = useState(false);
+  const [settings, setSettings] = useState<Settings>(loadSettings())
+
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
@@ -64,6 +86,10 @@ export default function ChatWidget() {
       fetchAllMessages();
     }
   }, []);
+
+  useEffect(() => {
+    saveSettings(settings);
+  }, [settings]);
   
   const fetchAllMessages = async () => {
     try {
@@ -217,10 +243,30 @@ export default function ChatWidget() {
     setEditingInput('')
   }
 
+  const handleLogout = () => {
+    localStorage.removeItem('jwt_token');
+    navigate('/login');
+ 
+  }
+
+  const toggleMaximize = () => {
+    setSettings(prevSettings => ({
+      ...prevSettings,
+      isMaximized: !prevSettings.isMaximized
+    }));
+  }
+
+  const cardClassName = settings.isMaximized 
+  ? "w-full h-full fixed top-0 left-0 z-50 m-0 rounded-none"
+  : "w-[450px] h-[700px] flex flex-col";
+
   return (
-    <div className="flex items-center justify-center h-screen">
-      <Card className="w-[450px] h-[700px] flex flex-col">
-        <CardHeader className="flex flex-col items-center text-center p-4">
+    <div className={`flex items-center justify-center ${settings.isMaximized ? 'min-h-screen bg-gray-100' : 'h-screen'}`}>
+      <Card className={`${cardClassName} flex flex-col`}>
+      <CardHeader className="flex flex-row justify-between items-start p-4">
+        <Button variant="ghost" size="icon" onClick={toggleMaximize}>
+            {settings.isMaximized ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+          </Button>
         <div className="flex flex-col items-center text-center">
             <Avatar className="mb-2">
               <AvatarImage src={AVAIcon} alt="Ava" />
@@ -228,6 +274,18 @@ export default function ChatWidget() {
             </Avatar>
             <p className="text-sm text-gray-500">Hey 👋, I'm Ava <br/> Ask me anything or pick a place to start</p>
           </div>
+          <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="ghost" size="icon" onClick={handleLogout}>
+                    <LogOut className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Logout</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
         </CardHeader>
         <CardContent className="flex-grow overflow-auto p-4">
           {messages.map((message) => (
