@@ -11,7 +11,9 @@ import asyncpg
 from passlib.context import CryptContext
 from jose import JWTError, jwt
 import os
+from fastapi.responses import StreamingResponse
 from datetime import datetime, timedelta
+import json
 
 # JWT settings
 SECRET_KEY = os.getenv("SECRET_KEY")
@@ -155,15 +157,14 @@ async def create_message(
         except asyncpg.UniqueViolationError:
             raise HTTPException(status_code=400, detail="Message with this ID already exists")
 
-    # Generate AI response
-    ai_content = f"AI response to: {message.content}"
+    bot_message_id = str(uuid.uuid4())
+    bot_message_content = ""
 
-    # Get AI response from chatbot
-    ai_content = await get_chatbot_response(message.content)
-
-    # Create bot message object
-    bot_message_id = uuid.uuid4()
-    bot_message = Message(id=bot_message_id, content=ai_content, sender=current_user.id, timestamp=datetime.now(), role='assistant')
+    async def event_generator():
+        nonlocal bot_message_content
+        async for token in get_chatbot_response(new_message.content):
+            bot_message_content += token
+            yield f"data: {json.dumps({'id': bot_message_id, 'content': token, 'role': 'assistant'})}\n\n"
 
     async def save_bot_message():
         async for new_db in get_db_connection():
@@ -172,30 +173,17 @@ async def create_message(
                     await new_db.execute('''
                         INSERT INTO messages (id, content, sender, timestamp, role)
                         VALUES ($1, $2, $3, $4, $5)
-                    ''', bot_message_id, ai_content, str(current_user.id), datetime.now(), 'assistant')
+                    ''', bot_message_id, bot_message_content, str(current_user.id), datetime.now(), 'assistant')
                 break  # Exit the loop after successful execution
             except Exception as e:
                 print(f"Error saving bot message: {e}")
             finally:
                 await new_db.close()
-    # Create a background task to save the AI response
+
     background_tasks.add_task(save_bot_message)
-    # Return the bot message immediately
-    return bot_message
 
-async def save_ai_response(db: asyncpg.Connection, user_id: str, content: str):
-    bot_message_id = uuid.uuid4()
-    bot_message = Message(id=bot_message_id, content=content, sender=user_id, timestamp=datetime.now(), role='assistant')
-    
-    try:
-        await db.execute('''
-            INSERT INTO messages (id, content, sender, timestamp, role)
-            VALUES ($1, $2, $3, $4, $5)
-        ''', bot_message.id, bot_message.content, user_id, bot_message.timestamp, bot_message.role)
-    except asyncpg.UniqueViolationError:
-        print(f"Failed to create AI response message with ID {bot_message_id}")
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
 
-    return bot_message
 
 @app.put("/messages/{message_id}", response_model=Message)
 async def update_message(

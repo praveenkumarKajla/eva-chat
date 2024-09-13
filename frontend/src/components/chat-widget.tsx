@@ -6,6 +6,8 @@ import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card"
 import { Pencil, Send, Trash2 } from 'lucide-react'
 import { v4 as randomUUID } from 'uuid'
 import { useNavigate } from 'react-router-dom'
+import AVAIcon from "@/assets/after-ava-graphic.png"
+import { AvatarImage } from '@radix-ui/react-avatar'
 
 type BackendMessage = {
   id: string;
@@ -43,6 +45,7 @@ export default function ChatWidget() {
   ])
   const [input, setInput] = useState('')
   const [editingInput, setEditingInput] = useState('')
+  const [isLoading, setIsLoading] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
@@ -92,6 +95,7 @@ export default function ChatWidget() {
     const newUserMessage: Message = { id: randomUUID(), role: 'user', content: input };
     setMessages((prevMessages) => [...prevMessages, newUserMessage]);
     setInput('');
+    setIsLoading(true);
 
     try {
       const response = await fetchWithAuth('/messages', {
@@ -104,24 +108,59 @@ export default function ChatWidget() {
         return;
       }
 
+
       if (!response.ok) {
         throw new Error('Failed to send message');
       }
 
-      const data = await response.json();
-      
-      const botMessage: Message = {
-        id: data.id,
-        role: data.role,
-        content: data.content
-      };
+      const reader = response.body!.getReader();
+      const decoder = new TextDecoder();
 
-      setMessages((prevMessages) => [...prevMessages, botMessage]);
+      let botMessageId: string | null = null;
+      let botMessageContent = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        
+        const chunk = decoder.decode(value);
+        const lines = chunk.split('\n');
+        
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const jsonStr = line.slice(5).trim();
+              if (jsonStr) {
+                const data = JSON.parse(jsonStr);
+                if (!botMessageId) {
+                  botMessageId = data.id;
+                  setMessages((prevMessages) => [
+                    ...prevMessages,
+                    { id: botMessageId!, role: 'assistant', content: '' }
+                  ]);
+                }
+                botMessageContent += data.content;
+                setMessages((prevMessages) =>
+                  prevMessages.map((msg) =>
+                    msg.id === botMessageId
+                      ? { ...msg, content: botMessageContent }
+                      : msg
+                  )
+                );
+              }
+            } catch (error) {
+              console.error('Error parsing JSON:', error);
+            }
+          }
+        }
+      }
 
     } catch (error) {
       console.error('Error sending message:', error);
       const errorMessage: Message = { id: randomUUID(), role: 'assistant', content: 'Sorry, there was an error processing your request.' };
       setMessages((prevMessages) => [...prevMessages, errorMessage]);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -181,14 +220,23 @@ export default function ChatWidget() {
     <div className="flex items-center justify-center h-screen">
       <Card className="w-[450px] h-[700px] flex flex-col">
         <CardHeader className="flex flex-col items-center text-center p-4">
-          <Avatar className="mb-2">
-            <AvatarFallback>AVA</AvatarFallback>
-          </Avatar>
-          <p className="text-sm text-gray-500">Hey 👋, I'm Ava <br/> Ask me anything or pick a place to start</p>
+        <div className="flex flex-col items-center text-center">
+            <Avatar className="mb-2">
+              <AvatarImage src={AVAIcon} alt="Ava" />
+              <AvatarFallback>AVA</AvatarFallback>
+            </Avatar>
+            <p className="text-sm text-gray-500">Hey 👋, I'm Ava <br/> Ask me anything or pick a place to start</p>
+          </div>
         </CardHeader>
         <CardContent className="flex-grow overflow-auto p-4">
           {messages.map((message) => (
             <div key={message.id} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'} mb-4`}>
+                {message.role === 'assistant' && (
+                <Avatar className="mr-2">
+                  <AvatarImage src={AVAIcon} alt="Ava" />
+                  <AvatarFallback>AVA</AvatarFallback>
+                </Avatar>
+              )}
               <div className={`max-w-[70%] ${message.role === 'user' ? 'bg-purple-500 text-white group relative' : 'bg-gray-100'} rounded-lg p-3`}>
                
                 {message.isEditing ? (
@@ -224,6 +272,21 @@ export default function ChatWidget() {
               </div>
             </div>
           ))}
+          {isLoading && (
+            <div className="flex justify-start mb-4">
+              <Avatar className="mr-2">
+                <AvatarImage src={AVAIcon} alt="Ava" />
+                <AvatarFallback>AVA</AvatarFallback>
+              </Avatar>
+              <div className="max-w-[70%] bg-gray-100 rounded-lg p-3">
+                <div className="flex items-center space-x-2">
+                  <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce"></div>
+                  <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                  <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '0.4s' }}></div>
+                </div>
+              </div>
+            </div>
+          )}
           <div ref={messagesEndRef} />
         </CardContent>
         <CardFooter className="p-4">
