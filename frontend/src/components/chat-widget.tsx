@@ -3,7 +3,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card"
-import { Send } from 'lucide-react'
+import { Pencil, Send, Trash2 } from 'lucide-react'
 import { v4 as randomUUID } from 'uuid'
 import { useNavigate } from 'react-router-dom'
 
@@ -19,6 +19,7 @@ type Message = {
   id: string;
   role: 'user' | 'assistant';
   content: string;
+  isEditing?: boolean;
 }
 
 
@@ -41,6 +42,8 @@ export default function ChatWidget() {
     { id: '0', role: 'assistant', content: "Hey👋, I'm Ava\nAsk me anything or pick a place to start" },
   ])
   const [input, setInput] = useState('')
+  const [editingInput, setEditingInput] = useState('')
+
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   const navigate = useNavigate();
@@ -122,6 +125,58 @@ export default function ChatWidget() {
     }
   };
 
+  const handleDeleteMessage = async (id: string) => {
+    try {
+      const response = await fetchWithAuth(`/messages/${id}`, {
+        method: 'DELETE',
+      });
+      if (!response.ok) {
+        throw new Error('Failed to delete message');
+      }
+      // After successful deletion, fetch all messages
+      await fetchAllMessages();
+    } catch (error) {
+      console.error('Error deleting message:', error);
+    }
+  };
+
+  const handleEditMessage = (id: string, content: string) => {
+    setEditingInput(content)
+    setMessages(prev => prev.map(message => 
+      message.id === id ? { ...message, isEditing: true } : message
+    ))
+  }
+
+  const handleSaveEdit = async (id: string, newContent: string) => {
+    if (newContent.trim()) {
+      try {
+        const response = await fetchWithAuth(`/messages/${id}`, {
+          method: 'PUT',
+          body: JSON.stringify({ content: newContent }),
+        });
+        if (!response.ok) {
+          throw new Error('Failed to update message');
+        }
+        const updatedMessages = messages.map(message => 
+          message.id === id ? { ...message, content: newContent, isEditing: false } : message
+        );
+        setMessages(updatedMessages);
+        setEditingInput('');
+      } catch (error) {
+        console.error('Error updating message:', error);
+      }
+    } else {
+      handleCancelEdit(id);
+    }
+  }
+
+  const handleCancelEdit = (id: string) => {
+    setMessages(prev => prev.map(message => 
+      message.id === id ? { ...message, isEditing: false } : message
+    ))
+    setEditingInput('')
+  }
+
   return (
     <div className="flex items-center justify-center h-screen">
       <Card className="w-[450px] h-[700px] flex flex-col">
@@ -134,8 +189,38 @@ export default function ChatWidget() {
         <CardContent className="flex-grow overflow-auto p-4">
           {messages.map((message) => (
             <div key={message.id} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'} mb-4`}>
-              <div className={`max-w-[70%] ${message.role === 'user' ? 'bg-purple-500 text-white' : 'bg-gray-100'} rounded-lg p-3`}>
-                <p className="text-sm">{message.content}</p>
+              <div className={`max-w-[70%] ${message.role === 'user' ? 'bg-purple-500 text-white group relative' : 'bg-gray-100'} rounded-lg p-3`}>
+               
+                {message.isEditing ? (
+                  <div className="flex flex-col space-y-2">
+                    <Input
+                      value={editingInput}
+                      onChange={(e) => setEditingInput(e.target.value)}
+                      onKeyPress={(e) => e.key === 'Enter' && handleSaveEdit(message.id, editingInput)}
+                      autoFocus
+                    />
+                    <div className="flex justify-end space-x-2">
+                      <Button size="sm" variant="ghost" onClick={() => handleCancelEdit(message.id)}>
+                        Cancel
+                      </Button>
+                      <Button size="sm" onClick={() => handleSaveEdit(message.id, editingInput)}>
+                        Save
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-sm">{message.content}</p>
+                )}
+                {message.role === 'user' && !message.isEditing && (
+                  <div className="absolute top-0 right-0 mt-1 mr-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <Button variant="ghost" size="icon" onClick={() => handleEditMessage(message.id, message.content)}>
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                  <Button variant="ghost" size="icon" onClick={() => handleDeleteMessage(message.id)}>
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+                )}
               </div>
             </div>
           ))}
