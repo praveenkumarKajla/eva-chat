@@ -1,8 +1,9 @@
-from fastapi import FastAPI, HTTPException, Depends, Body, status
+from fastapi import FastAPI, HTTPException, Depends, Body, status, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from pydantic import BaseModel, EmailStr
 from typing import List, Optional
+from chatbot import get_chatbot_response
+
 from database import get_db_connection, init_db, close_db_connections
 from models.schemas import User, UserCreate, UserInDB, Token, TokenData, Message, MessageCreate
 import uuid
@@ -11,7 +12,6 @@ from passlib.context import CryptContext
 from jose import JWTError, jwt
 import os
 from datetime import datetime, timedelta
-from uuid import UUID
 
 # JWT settings
 SECRET_KEY = os.getenv("SECRET_KEY")
@@ -133,6 +133,7 @@ async def read_messages(current_user: User = Depends(get_current_user), db: asyn
 @app.post("/messages", response_model=Message)
 async def create_message(
     message: MessageCreate,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
     db: asyncpg.Connection = Depends(get_db_connection),
 ):
@@ -157,18 +158,42 @@ async def create_message(
     # Generate AI response
     ai_content = f"AI response to: {message.content}"
 
-    # Store AI response in the database
+    # Get AI response from chatbot
+    ai_content = await get_chatbot_response(message.content)
+
+    # Create bot message object
     bot_message_id = uuid.uuid4()
     bot_message = Message(id=bot_message_id, content=ai_content, sender=current_user.id, timestamp=datetime.now(), role='assistant')
+
+    async def save_bot_message():
+        async for new_db in get_db_connection():
+            try:
+                async with new_db.transaction():
+                    await new_db.execute('''
+                        INSERT INTO messages (id, content, sender, timestamp, role)
+                        VALUES ($1, $2, $3, $4, $5)
+                    ''', bot_message_id, ai_content, str(current_user.id), datetime.now(), 'assistant')
+                break  # Exit the loop after successful execution
+            except Exception as e:
+                print(f"Error saving bot message: {e}")
+            finally:
+                await new_db.close()
+    # Create a background task to save the AI response
+    background_tasks.add_task(save_bot_message)
+    # Return the bot message immediately
+    return bot_message
+
+async def save_ai_response(db: asyncpg.Connection, user_id: str, content: str):
+    bot_message_id = uuid.uuid4()
+    bot_message = Message(id=bot_message_id, content=content, sender=user_id, timestamp=datetime.now(), role='assistant')
     
     try:
         await db.execute('''
             INSERT INTO messages (id, content, sender, timestamp, role)
             VALUES ($1, $2, $3, $4, $5)
-        ''', bot_message.id, bot_message.content, current_user.id, bot_message.timestamp, bot_message.role)
+        ''', bot_message.id, bot_message.content, user_id, bot_message.timestamp, bot_message.role)
     except asyncpg.UniqueViolationError:
-        # If this happens, it's extremely unlikely but we should handle it
-        raise HTTPException(status_code=500, detail="Failed to create AI response message")
+        print(f"Failed to create AI response message with ID {bot_message_id}")
 
     return bot_message
 

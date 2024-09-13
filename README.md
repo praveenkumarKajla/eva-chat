@@ -36,12 +36,18 @@ To run the backend:
     ```
     DATABASE_URL=postgresql://your_username:your_password@localhost:5432/your_database_name
     ```
+3. Add your OpenAI API key:
+    - Update the `.env` file in the `backend` directory
+    - Add your OpenAI API key:
+    ```
+    OPENAI_API_KEY=your_openai_api_key_here
+    ```
     
-3. Run the database setup script after updating the database name in the setup.sql file:
+4. Run the database setup script after updating the database name in the setup.sql file:
    ```
    psql -d your_database_name -f backend/setup.sql
    ```
-4. Start the backend server:
+5. Start the backend server:
    ```
     uvicorn main:app --reload
    ```
