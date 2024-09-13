@@ -20,13 +20,31 @@ The backend is built using FastAPI.
 
 To run the backend:
 
-```bash
-cd backend
-python -m venv venv 
-source venv/bin/activate
-pip install -r requirements.txt
-uvicorn main:app --reload
-```
+1. Install the required Python packages:
+
+    ```bash
+    cd backend
+    python -m venv venv 
+    source venv/bin/activate
+    pip install -r requirements.txt
+    ```
+2. Set up the PostgreSQL database:
+
+    - Install PostgreSQL if not already installed
+    - Create a new database for the project
+    - Update the `.env` file in the `backend` directory with your database credentials:
+    ```
+    DATABASE_URL=postgresql://your_username:your_password@localhost:5432/your_database_name
+    ```
+    
+3. Run the database setup script after updating the database name in the setup.sql file:
+   ```
+   psql -d your_database_name -f backend/setup.sql
+   ```
+4. Start the backend server:
+   ```
+    uvicorn main:app --reload
+   ```
 
 ## Running the Application
 
