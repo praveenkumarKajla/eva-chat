@@ -4,13 +4,37 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card"
 import { Send } from 'lucide-react'
+import { v4 as randomUUID } from 'uuid'
 import { useNavigate } from 'react-router-dom'
+
+type BackendMessage = {
+  id: string;
+  content: string;
+  role: 'user' | 'assistant';
+  sender: string;
+  timestamp: string;
+}
 
 type Message = {
   id: string;
   role: 'user' | 'assistant';
   content: string;
 }
+
+
+const API_BASE_URL = 'http://localhost:8000';
+
+const fetchWithAuth = (url: string, options: RequestInit = {}) => {
+  const token = localStorage.getItem('jwt_token'); // Assume token is stored in localStorage after login
+  return fetch(`${API_BASE_URL}${url}`, {
+    ...options,
+    headers: {
+      ...options.headers,
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+  });
+};
 
 export default function ChatWidget() {
   const [messages, setMessages] = useState<Message[]>([
@@ -29,21 +53,74 @@ export default function ChatWidget() {
     const token = localStorage.getItem('jwt_token');
     if (!token) {
       navigate('/login');
+    } else {
+      fetchAllMessages();
     }
   }, []);
+  
+  const fetchAllMessages = async () => {
+    try {
+      const response = await fetchWithAuth('/messages');
+      if (response.status === 401) {
+        navigate('/login');
+        return;
+      }
+      if (!response.ok) {
+        throw new Error('Failed to fetch messages');
+      }
+      const data: BackendMessage[] = await response.json();
+      const fetchedMessages: Message[] = data.map((msg) => ({
+        id: msg.id,
+        role: msg.role,
+        content: msg.content
+      }));
+      setMessages(fetchedMessages);
+    } catch (error) {
+      console.error('Error fetching messages:', error);
+    }
+  };
 
 
   useEffect(scrollToBottom, [messages])
 
-  const handleSendMessage = () => {
+  const handleSendMessage = async () => {
     if (input.trim() === '') return;
 
-    const newUserMessage: Message = { id: Date.now().toString(), role: 'user', content: input };
+    const newUserMessage: Message = { id: randomUUID(), role: 'user', content: input };
     setMessages((prevMessages) => [...prevMessages, newUserMessage]);
     setInput('');
 
-    // TODO: Implement actual message sending logic
-  }
+    try {
+      const response = await fetchWithAuth('/messages', {
+        method: 'POST',
+        body: JSON.stringify({ content: input, id: newUserMessage.id }),
+      });
+
+      if (response.status === 401) {
+        navigate('/login');
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error('Failed to send message');
+      }
+
+      const data = await response.json();
+      
+      const botMessage: Message = {
+        id: data.id,
+        role: data.role,
+        content: data.content
+      };
+
+      setMessages((prevMessages) => [...prevMessages, botMessage]);
+
+    } catch (error) {
+      console.error('Error sending message:', error);
+      const errorMessage: Message = { id: randomUUID(), role: 'assistant', content: 'Sorry, there was an error processing your request.' };
+      setMessages((prevMessages) => [...prevMessages, errorMessage]);
+    }
+  };
 
   return (
     <div className="flex items-center justify-center h-screen">
