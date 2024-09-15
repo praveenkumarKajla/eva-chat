@@ -9,6 +9,8 @@ import { v4 as randomUUID } from 'uuid'
 import { useNavigate } from 'react-router-dom'
 import AVAIcon from "@/assets/after-ava-graphic.png"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { Skeleton } from '@/components/ui/skeleton';
+import { useAuth } from '@/contexts/useAuth'
 
 
 type BackendMessage = {
@@ -61,9 +63,9 @@ const fetchWithAuth = (url: string, options: RequestInit = {}) => {
 };
 
 export default function ChatWidget() {
-  const [messages, setMessages] = useState<Message[]>([
-    { id: '0', role: 'assistant', content: "Hey👋, I'm Ava\nAsk me anything or pick a place to start" },
-  ])
+  const { user, logout } = useAuth();
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [input, setInput] = useState('')
   const [editingInput, setEditingInput] = useState('')
   const [isLoading, setIsLoading] = useState(false);
@@ -80,13 +82,12 @@ export default function ChatWidget() {
   }
 
   useEffect(() => {
-    const token = localStorage.getItem('jwt_token');
-    if (!token) {
+    if (!user) {
       navigate('/login');
-    } else {
+    } else if (user) {
       fetchAllMessages();
     }
-  }, []);
+  }, [user, navigate]);
 
   useEffect(() => {
     saveSettings(settings);
@@ -94,11 +95,8 @@ export default function ChatWidget() {
   
   const fetchAllMessages = async () => {
     try {
+      setIsInitialLoading(true);
       const response = await fetchWithAuth('/messages');
-      if (response.status === 401) {
-        navigate('/login');
-        return;
-      }
       if (!response.ok) {
         throw new Error('Failed to fetch messages');
       }
@@ -111,6 +109,9 @@ export default function ChatWidget() {
       setMessages(fetchedMessages);
     } catch (error) {
       console.error('Error fetching messages:', error);
+      // Show error message to user
+    } finally {
+      setIsInitialLoading(false);
     }
   };
 
@@ -130,12 +131,6 @@ export default function ChatWidget() {
         method: 'POST',
         body: JSON.stringify({ content: input, id: newUserMessage.id }),
       });
-
-      if (response.status === 401) {
-        navigate('/login');
-        return;
-      }
-
 
       if (!response.ok) {
         throw new Error('Failed to send message');
@@ -185,7 +180,11 @@ export default function ChatWidget() {
 
     } catch (error) {
       console.error('Error sending message:', error);
-      const errorMessage: Message = { id: randomUUID(), role: 'assistant', content: 'Sorry, there was an error processing your request.' };
+      const errorMessage: Message = { 
+        id: randomUUID(), 
+        role: 'assistant', 
+        content: 'Sorry, there was an error processing your request. Please try again.' 
+      };
       setMessages((prevMessages) => [...prevMessages, errorMessage]);
     } finally {
       setIsLoading(false);
@@ -245,7 +244,7 @@ export default function ChatWidget() {
   }
 
   const handleLogout = () => {
-    localStorage.removeItem('jwt_token');
+    logout();
     navigate('/login');
  
   }
@@ -289,48 +288,52 @@ export default function ChatWidget() {
             </TooltipProvider>
         </CardHeader>
         <CardContent className="flex-grow overflow-auto p-4">
-          {messages.map((message) => (
-            <div key={message.id} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'} mb-4`}>
-              {message.role === 'assistant' && (
-                <Avatar className="mr-2">
-                  <AvatarImage src={AVAIcon} alt="Ava" />
-                  <AvatarFallback>AVA</AvatarFallback>
-                </Avatar>
-              )}
-              <div className={`max-w-[70%] ${message.role === 'user' ? 'bg-purple-500 text-white group relative' : 'bg-gray-100'} rounded-lg p-3`}>
-                {message.isEditing ? (
-                  <div className="flex flex-col space-y-2">
-                    <Input
-                      value={editingInput}
-                      onChange={(e) => setEditingInput(e.target.value)}
-                      onKeyPress={(e) => e.key === 'Enter' && handleSaveEdit(message.id, editingInput)}
-                      autoFocus
-                    />
-                    <div className="flex justify-end space-x-2">
-                      <Button size="sm" variant="ghost" onClick={() => handleCancelEdit(message.id)}>
-                        Cancel
+          {isInitialLoading ? (
+            <MessageSkeleton />
+          ) : (
+            messages.map((message) => (
+              <div key={message.id} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'} mb-4`}>
+                {message.role === 'assistant' && (
+                  <Avatar className="mr-2">
+                    <AvatarImage src={AVAIcon} alt="Ava" />
+                    <AvatarFallback>AVA</AvatarFallback>
+                  </Avatar>
+                )}
+                <div className={`max-w-[70%] ${message.role === 'user' ? 'bg-purple-500 text-white group relative' : 'bg-gray-100'} rounded-lg p-3`}>
+                  {message.isEditing ? (
+                    <div className="flex flex-col space-y-2">
+                      <Input
+                        value={editingInput}
+                        onChange={(e) => setEditingInput(e.target.value)}
+                        onKeyPress={(e) => e.key === 'Enter' && handleSaveEdit(message.id, editingInput)}
+                        autoFocus
+                      />
+                      <div className="flex justify-end space-x-2">
+                        <Button size="sm" variant="ghost" onClick={() => handleCancelEdit(message.id)}>
+                          Cancel
+                        </Button>
+                        <Button size="sm" onClick={() => handleSaveEdit(message.id, editingInput)}>
+                          Save
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <ReactMarkdown className={"text-sm"}>{message.content}</ReactMarkdown>
+                  )}
+                  {message.role === 'user' && !message.isEditing && (
+                    <div className="absolute top-0 right-0 mt-1 mr-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <Button variant="ghost" size="icon" onClick={() => handleEditMessage(message.id, message.content)}>
+                        <Pencil className="h-4 w-4" />
                       </Button>
-                      <Button size="sm" onClick={() => handleSaveEdit(message.id, editingInput)}>
-                        Save
+                      <Button variant="ghost" size="icon" onClick={() => handleDeleteMessage(message.id)}>
+                        <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
-                  </div>
-                ) : (
-                  <ReactMarkdown className={"text-sm"}>{message.content}</ReactMarkdown>
-                )}
-                {message.role === 'user' && !message.isEditing && (
-                  <div className="absolute top-0 right-0 mt-1 mr-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <Button variant="ghost" size="icon" onClick={() => handleEditMessage(message.id, message.content)}>
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                    <Button variant="ghost" size="icon" onClick={() => handleDeleteMessage(message.id)}>
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            ))
+          )}
           {isLoading && (
             <div className="flex justify-start mb-4">
               <Avatar className="mr-2">
@@ -379,6 +382,18 @@ export default function ChatWidget() {
           </div>
         </div>
       </Card>
+    </div>
+  )
+}
+
+function MessageSkeleton() {
+  return (
+    <div className="flex items-center space-x-4 mb-4">
+      <Skeleton className="h-10 w-10 rounded-full" />
+      <div className="space-y-2">
+        <Skeleton className="h-4 w-[250px]" />
+        <Skeleton className="h-4 w-[200px]" />
+      </div>
     </div>
   )
 }

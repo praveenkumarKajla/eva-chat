@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { AlertCircle, Loader2 } from 'lucide-react'
+import { useAuth } from '@/contexts/useAuth'
 
 const API_BASE_URL = 'http://localhost:8000' // Adjust this to match your backend URL
 
@@ -17,6 +18,13 @@ export default function LoginPage() {
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const navigate = useNavigate();
+  const { login, user } = useAuth();
+
+  useEffect(() => {
+    if (user) {
+      navigate('/chat');
+    }
+  }, [user, navigate]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -46,7 +54,7 @@ export default function LoginPage() {
 
       const data = await response.json()
       const { access_token } = data
-      localStorage.setItem('jwt_token', access_token)
+      login(access_token) // Use the login function from AuthContext
       navigate('/chat') // Redirect to chat page
     } catch (error) {
       console.error('Login failed:', error)
@@ -59,7 +67,6 @@ export default function LoginPage() {
   const navigateToRegister = () => {
     navigate('/register')
   }
-
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-gray-100">

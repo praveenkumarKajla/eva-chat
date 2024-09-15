@@ -3,19 +3,22 @@ import ChatWidget from '@/components/chat-widget';
 import LoginPage from '@/components/Login';
 import RegisterPage from '@/components/Register';
 import './styles/global.css'
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 
 function App() {
   return (
-    <Router>
-      <div className="App">
-        <Routes>
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/register" element={<RegisterPage />} />
-          <Route path="/chat" element={<ChatWidget />} />
-          <Route path="/" element={<Navigate to="/chat" replace />} />
-        </Routes>
-      </div>
-    </Router>
+    <ErrorBoundary>
+      <Router>
+        <div className="App">
+          <Routes>
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/register" element={<RegisterPage />} />
+            <Route path="/chat" element={<ChatWidget />} />
+            <Route path="/" element={<Navigate to="/chat" replace />} />
+          </Routes>
+        </div>
+      </Router>
+    </ErrorBoundary>
   );
 }
 
