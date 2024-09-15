@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Depends, Body, status, BackgroundTasks
+from fastapi import FastAPI, HTTPException, Depends, Body, status, BackgroundTasks, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from typing import List, Optional
@@ -14,6 +14,11 @@ import os
 from fastapi.responses import StreamingResponse
 from datetime import datetime, timedelta
 import json
+import logging
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 
 # JWT settings
 SECRET_KEY = os.getenv("SECRET_KEY")
@@ -36,6 +41,25 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Set up rate limiting
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# Add trusted host middleware
+app.add_middleware(TrustedHostMiddleware, allowed_hosts=["localhost"])
+
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    logger.info(f"Request: {request.method} {request.url}")
+    response = await call_next(request)
+    logger.info(f"Response status: {response.status_code}")
+    return response
 
 # Placeholder for database
 messages_db = []
@@ -100,6 +124,10 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: asyncpg.Conn
 
 @app.post("/register", response_model=User)
 async def register(user: UserCreate, db: asyncpg.Connection = Depends(get_db_connection)):
+    if not user.email or not user.password or not user.first_name or not user.last_name:
+        raise HTTPException(status_code=400, detail="All fields are required")
+    if len(user.password) < 8:
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters long")
     db_user = await get_user(user.email, db)
     if db_user:
         raise HTTPException(status_code=400, detail="Email already registered")
@@ -113,18 +141,21 @@ async def register(user: UserCreate, db: asyncpg.Connection = Depends(get_db_con
 
 @app.post("/token", response_model=Token)
 async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: asyncpg.Connection = Depends(get_db_connection)):
-    user = await authenticate_user(form_data.username, form_data.password, db)
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect email or password",
-            headers={"WWW-Authenticate": "Bearer"},
+    try:
+        user = await authenticate_user(form_data.username, form_data.password, db)
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Incorrect email or password",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+        access_token = create_access_token(
+            data={"sub": user.email}, expires_delta=access_token_expires
         )
-    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    access_token = create_access_token(
-        data={"sub": user.email}, expires_delta=access_token_expires
-    )
-    return {"access_token": access_token, "token_type": "bearer"}
+        return {"access_token": access_token, "token_type": "bearer"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"An error occurred during authentication: {str(e)}")
 
 @app.get("/messages", response_model=List[Message])
 async def read_messages(current_user: User = Depends(get_current_user), db: asyncpg.Connection = Depends(get_db_connection)):
@@ -133,7 +164,10 @@ async def read_messages(current_user: User = Depends(get_current_user), db: asyn
 
 
 @app.post("/messages", response_model=Message)
+@limiter.limit("50/minute")
 async def create_message(
+    # request is used for rate limiting
+    request: Request,
     message: MessageCreate,
     background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
@@ -148,14 +182,16 @@ async def create_message(
         role='user'
     )
     
-    async with db.transaction():
-        try:
+    try:
+        async with db.transaction():
             await db.execute('''
                 INSERT INTO messages (id, content, sender, timestamp, role)
                 VALUES ($1, $2, $3, $4, $5)
             ''', new_message.id, new_message.content, current_user.id, new_message.timestamp, new_message.role)
-        except asyncpg.UniqueViolationError:
-            raise HTTPException(status_code=400, detail="Message with this ID already exists")
+    except asyncpg.UniqueViolationError:
+        raise HTTPException(status_code=400, detail="Message with this ID already exists")
+    except asyncpg.PostgresError as e:
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
     bot_message_id = str(uuid.uuid4())
     bot_message_content = ""
@@ -167,18 +203,21 @@ async def create_message(
             yield f"data: {json.dumps({'id': bot_message_id, 'content': token, 'role': 'assistant'})}\n\n"
 
     async def save_bot_message():
-        async for new_db in get_db_connection():
-            try:
-                async with new_db.transaction():
-                    await new_db.execute('''
-                        INSERT INTO messages (id, content, sender, timestamp, role)
-                        VALUES ($1, $2, $3, $4, $5)
-                    ''', bot_message_id, bot_message_content, str(current_user.id), datetime.now(), 'assistant')
-                break  # Exit the loop after successful execution
-            except Exception as e:
-                print(f"Error saving bot message: {e}")
-            finally:
-                await new_db.close()
+        try:
+            async for new_db in get_db_connection():
+                try:
+                    async with new_db.transaction():
+                        await new_db.execute('''
+                            INSERT INTO messages (id, content, sender, timestamp, role)
+                            VALUES ($1, $2, $3, $4, $5)
+                        ''', bot_message_id, bot_message_content, str(current_user.id), datetime.now(), 'assistant')
+                    break  # Exit the loop after successful execution
+                except Exception as e:
+                    logger.error(f"Error saving bot message: {e}")
+                finally:
+                    await new_db.close()
+        except Exception as e:
+            logger.error(f"Unhandled error in save_bot_message: {e}")
 
     background_tasks.add_task(save_bot_message)
 
@@ -192,20 +231,22 @@ async def update_message(
     current_user: User = Depends(get_current_user),
     db: asyncpg.Connection = Depends(get_db_connection)
 ):
-    content = message.get("content")
-    if not content:
-        raise HTTPException(status_code=400, detail="Content is required")
-
-    result = await db.fetchrow('''
-        UPDATE messages
-        SET content = $1
-        WHERE id = $2 AND sender = $3
-        RETURNING *
-    ''', content, message_id, str(current_user.id))
-    
-    if result:
-        return Message(id=result['id'], content=result['content'], sender=result['sender'], timestamp=result['timestamp'], role=result['role'])
-    raise HTTPException(status_code=404, detail="Message not found or not editable")
+    try:
+        content = message.get("content")
+        if not content:
+            raise HTTPException(status_code=400, detail="Content is required")
+        result = await db.fetchrow('''
+            UPDATE messages
+            SET content = $1
+            WHERE id = $2 AND sender = $3
+            RETURNING *
+        ''', content, message_id, current_user.id)
+        
+        if result:
+            return Message(id=result['id'], content=result['content'], sender=result['sender'], timestamp=result['timestamp'], role=result['role'])
+        raise HTTPException(status_code=404, detail="Message not found or not editable")
+    except asyncpg.PostgresError as e:
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
 @app.delete("/messages/{message_id}", status_code=204)
 async def delete_message(
