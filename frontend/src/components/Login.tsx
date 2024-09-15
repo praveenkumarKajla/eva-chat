@@ -32,18 +32,13 @@ export default function LoginPage() {
     setIsLoading(true)
 
     try {
-      const myHeaders = new Headers()
-      myHeaders.append("Content-Type", "application/x-www-form-urlencoded")
-
-      const urlencoded = new URLSearchParams()
-      urlencoded.append("username", email)
-      urlencoded.append("password", password)
 
       const requestOptions = {
         method: "POST",
-        headers: myHeaders,
-        body: urlencoded,
-        redirect: "follow" as RequestRedirect,
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: `username=${encodeURIComponent(email)}&password=${encodeURIComponent(password)}`,
       }
 
       const response = await fetch(`${API_BASE_URL}/token`, requestOptions)
@@ -54,8 +49,8 @@ export default function LoginPage() {
 
       const data = await response.json()
       const { access_token } = data
-      login(access_token) // Use the login function from AuthContext
-      navigate('/chat') // Redirect to chat page
+      login(access_token)
+      navigate('/chat')
     } catch (error) {
       console.error('Login failed:', error)
       setError('Login failed. Please check your credentials and try again.')
