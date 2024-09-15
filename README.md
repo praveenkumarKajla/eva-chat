@@ -49,7 +49,7 @@ To run the backend:
    ```
 5. Start the backend server:
    ```
-    uvicorn main:app --reload
+    uvicorn app.main:app --reload
    ```
 
 ## Running the Application

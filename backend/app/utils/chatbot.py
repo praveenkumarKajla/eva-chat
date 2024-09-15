@@ -1,12 +1,8 @@
 from openai import AsyncOpenAI
-import os
+from app.config import OPENAI_API_KEY
 from typing import List, Dict
-from dotenv import load_dotenv
 
-# Load environment variables from .env file
-load_dotenv()
-
-aclient = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+aclient = AsyncOpenAI(api_key=OPENAI_API_KEY)
 
 class Chatbot:
     def __init__(self):
