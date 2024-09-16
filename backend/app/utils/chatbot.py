@@ -18,7 +18,6 @@ class Chatbot:
                 model="gpt-4o-mini",
                 messages=self.conversation_history,
                 stream=True,
-                max_tokens=150,
                 n=1,
                 temperature=0.7
             )
