@@ -7,7 +7,7 @@ import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card"
 import { LogOut, Maximize2, Minimize2, Pencil, Send, Trash2, Settings } from 'lucide-react'
 import { v4 as randomUUID } from 'uuid'
 import { useNavigate } from 'react-router-dom'
-import AVAIcon from "@/assets/after-ava-graphic.png"
+import EVAIcon from "@/assets/after-ava-graphic.png"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/contexts/useAuth'
@@ -71,6 +71,7 @@ export default function ChatWidget() {
   const [isLoading, setIsLoading] = useState(false);
   const [context, setContext] = useState('Onboarding')
   const [settings, setSettings] = useState<Settings>(loadSettings())
+  const [isFirstLoad, setIsFirstLoad] = useState(true);
 
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -116,7 +117,12 @@ export default function ChatWidget() {
   };
 
 
-  useEffect(scrollToBottom, [messages])
+  useEffect(() => {
+    if (isFirstLoad && messages.length > 0) {
+      scrollToBottom();
+      setIsFirstLoad(false);
+    }
+  }, [messages, isFirstLoad]);
 
   const handleSendMessage = async () => {
     if (input.trim() === '') return;
@@ -176,6 +182,7 @@ export default function ChatWidget() {
             }
           }
         }
+        scrollToBottom();
       }
 
     } catch (error) {
@@ -269,10 +276,10 @@ export default function ChatWidget() {
           </Button>
           <div className="flex flex-col items-center text-center">
             <Avatar className="mb-2">
-              <AvatarImage src={AVAIcon} alt="Ava" />
-              <AvatarFallback>AVA</AvatarFallback>
+              <AvatarImage src={EVAIcon} alt="Eva" />
+              <AvatarFallback>EVA</AvatarFallback>
             </Avatar>
-            <p className="text-sm text-gray-500">Hey 👋, I'm Ava <br/> Ask me anything or pick a place to start</p>
+            <p className="text-sm text-gray-500">Hey 👋, I'm Eva <br/> Ask me anything or pick a place to start</p>
           </div>
           <TooltipProvider>
               <Tooltip>
@@ -295,8 +302,8 @@ export default function ChatWidget() {
               <div key={message.id} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'} mb-4`}>
                 {message.role === 'assistant' && (
                   <Avatar className="mr-2">
-                    <AvatarImage src={AVAIcon} alt="Ava" />
-                    <AvatarFallback>AVA</AvatarFallback>
+                    <AvatarImage src={EVAIcon} alt="Ava" />
+                    <AvatarFallback>EVA</AvatarFallback>
                   </Avatar>
                 )}
                 <div className={`max-w-[70%] ${message.role === 'user' ? 'bg-purple-500 text-white group relative' : 'bg-gray-100'} rounded-lg p-3`}>
@@ -337,8 +344,8 @@ export default function ChatWidget() {
           {isLoading && (
             <div className="flex justify-start mb-4">
               <Avatar className="mr-2">
-                <AvatarImage src={AVAIcon} alt="Ava" />
-                <AvatarFallback>AVA</AvatarFallback>
+                <AvatarImage src={EVAIcon} alt="Ava" />
+                <AvatarFallback>EVA</AvatarFallback>
               </Avatar>
               <div className="max-w-[70%] bg-gray-100 rounded-lg p-3">
                 <div className="flex items-center space-x-2">
