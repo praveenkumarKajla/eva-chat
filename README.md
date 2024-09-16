@@ -47,7 +47,18 @@ To run the backend:
    ```
    psql -d your_database_name -f backend/setup.sql
    ```
-5. Start the backend server:
+5. Add a secret key to your .env file:
+   - Generate a secure random string to use as your secret key. You can use a tool like OpenSSL:
+     ```bash
+     openssl rand -hex 32
+     ```
+   - Add the generated secret key to your `.env` file:
+     ```
+     SECRET_KEY=your_generated_secret_key_here
+     ```
+   Replace `your_generated_secret_key_here` with the actual key you generated.
+
+6. Start the backend server:
    ```
     uvicorn app.main:app --reload
    ```

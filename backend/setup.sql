@@ -5,17 +5,17 @@ CREATE DATABASE your_database_name;
 \c your_database_name
 
 -- Create a new user if it doesn't exist
-CREATE USER evachatuser WITH PASSWORD 'your_password_here';
+CREATE USER your_username WITH PASSWORD 'your_password_here';
 
 -- Grant necessary permissions
-GRANT ALL PRIVILEGES ON DATABASE your_database_name TO evachatuser;
-GRANT ALL PRIVILEGES ON SCHEMA public TO evachatuser;
-GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO evachatuser;
-GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO evachatuser;
+GRANT ALL PRIVILEGES ON DATABASE your_database_name TO your_username;
+GRANT ALL PRIVILEGES ON SCHEMA public TO your_username;
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO your_username;
+GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO your_username;
 
 -- Alter default privileges for future tables
-ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO evachatuser;
-ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO evachatuser;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO your_username;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO your_username;
 
 -- Create users table
 CREATE TABLE IF NOT EXISTS users (
